@@ -1,16 +1,33 @@
 #include <ClickEncoder.h>
 #include <TimerOne.h>
 #include <TM1637Display.h>
+#include <everytime.h>
 
 #include "pins.h"
+#include "debug.h"
 
-#define VOLUME_PER_PULSE 0.002083297;
+#define VOLUME_PER_PULSE 2.2222222222; // in ml
 
-float volume = 0;
+int16_t desiredVolume = 0; // in dl
+float remainingVolume = 0; // in ml
 bool running = false;
 
-ClickEncoder encoder = ClickEncoder(ENC_A, ENC_B, BUTTON, 1);
-TM1637Display display(SR_CLOCK, SR_DATA);
+ClickEncoder encoder = ClickEncoder(ENC_A, ENC_B, BUTTON, 4);
+TM1637Display display(DISPLAY_CLOCK, DISPLAY_DATA);
+
+void startFlow() {
+  running = true;
+  remainingVolume = desiredVolume * 100;
+  digitalWrite(VALVE, HIGH);
+  DEBUG_PRINTLN("Valve Open");
+}
+
+void stopFlow() {
+  running = false;
+  desiredVolume = (int)(remainingVolume / 100.0);
+  digitalWrite(VALVE, LOW);
+  DEBUG_PRINTLN("Valve Closed");
+}
 
 void timerInterrupt() {
   encoder.service();
@@ -18,20 +35,31 @@ void timerInterrupt() {
 
 void flowSensorInterrupt() {
   if (running) {
-    volume -= VOLUME_PER_PULSE;
-    if (volume <= 0) {
-      digitalWrite(VALVE, LOW);
-      volume = 0;
+    remainingVolume -= VOLUME_PER_PULSE;
+    if (remainingVolume <= 0) {
+      remainingVolume = 0;
+      stopFlow();
     }
-    updateDisplay();
   }
 }
 
 void updateDisplay() {
-  display.showNumberDecEx((int)(volume * 10), 0b00100000);
+  if (running) {
+    DEBUG_PRINT("Remaining: ");
+    DEBUG_PRINT(remainingVolume);
+    DEBUG_PRINTLN("mL");
+    display.showNumberDecEx((int)(remainingVolume / 100.0), 0b00100000);
+  } else {
+    DEBUG_PRINT("Desired: ");
+    DEBUG_PRINT(desiredVolume);
+    DEBUG_PRINTLN("00mL");
+    display.showNumberDecEx(desiredVolume, 0b00100000);
+  }
 }
 
 void setup() {
+  DEBUG_SETUP();
+
   pinMode(VALVE, OUTPUT);
   digitalWrite(VALVE, LOW);
 
@@ -48,25 +76,25 @@ void setup() {
 }
 
 void loop() {
-  static int16_t lastPosition = 0;
-
   if (!running) {
     int16_t encoderPosition = encoder.getValue();
-    if (encoderPosition != lastPosition) {
-      volume = constrain(volume + (encoderPosition - lastPosition) / 10, 0, 100);
-      lastPosition = encoderPosition;
+    if (encoderPosition != 0) {
+      desiredVolume = constrain(desiredVolume + encoderPosition, 0, 1000);
+      updateDisplay();
+    }
+  } else {
+    every(1000) {
       updateDisplay();
     }
   }
 
   ClickEncoder::Button button = encoder.getButton();
 
-  if (button == ClickEncoder::Held) {
-    running = !running;
-    if (!running) {
-      digitalWrite(VALVE, LOW);
-    } else if (volume > 0) {
-      digitalWrite(VALVE, HIGH);
+  if (button == ClickEncoder::Clicked) {
+    if (running) {
+      stopFlow();
+    } else if (desiredVolume > 0) {
+      startFlow();
     }
   }
 }
