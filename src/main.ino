@@ -1,7 +1,7 @@
 #include <ClickEncoder.h>
 #include <TimerOne.h>
-#include <TM1637Display.h>
 #include <everytime.h>
+#include <LedControl_HW_SPI.h>
 
 #include "pins.h"
 #include "debug.h"
@@ -13,11 +13,12 @@ float remainingVolume = 0; // in ml
 bool running = false;
 
 ClickEncoder encoder = ClickEncoder(ENC_A, ENC_B, BUTTON, 4);
-TM1637Display display(DISPLAY_CLOCK, DISPLAY_DATA);
+
+LedControl_HW_SPI display = LedControl_HW_SPI();
 
 void startFlow() {
   running = true;
-  remainingVolume = desiredVolume * 100;
+  remainingVolume = desiredVolume * 100.0;
   digitalWrite(VALVE, HIGH);
   DEBUG_PRINTLN("Valve Open");
 }
@@ -44,17 +45,24 @@ void flowSensorInterrupt() {
 }
 
 void updateDisplay() {
+  int displayValue;
+
   if (running) {
     DEBUG_PRINT("Remaining: ");
     DEBUG_PRINT(remainingVolume);
     DEBUG_PRINTLN("mL");
-    display.showNumberDecEx((int)(remainingVolume / 100.0), 0b00100000);
+    displayValue = (int)(remainingVolume / 100.0);
   } else {
     DEBUG_PRINT("Desired: ");
     DEBUG_PRINT(desiredVolume);
     DEBUG_PRINTLN("00mL");
-    display.showNumberDecEx(desiredVolume, 0b00100000);
+    displayValue = desiredVolume;
   }
+
+  display.setDigit(0, 3, (byte)((displayValue % 10000) / 1000), false);
+  display.setDigit(0, 2, (byte)((displayValue % 1000) / 100), false);
+  display.setDigit(0, 1, (byte)((displayValue % 100) / 10), true);
+  display.setDigit(0, 0, (byte)(displayValue % 10), false);
 }
 
 void setup() {
@@ -71,6 +79,11 @@ void setup() {
 
   encoder.setButtonHeldEnabled(true);
   encoder.setAccelerationEnabled(true);
+
+  display.begin(DISPLAY_CS, 1);
+  display.shutdown(0,false);
+  display.setIntensity(0,8);
+  display.clearDisplay(0);
 
   updateDisplay();
 }

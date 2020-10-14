@@ -1,10 +1,11 @@
 #ifndef __PINS_H__
 #define __PINS_H__
 
-#define VALVE 10
+#define VALVE 9
 
-#define DISPLAY_CLOCK 9
-#define DISPLAY_DATA 8
+#define DISPLAY_CLOCK 13
+#define DISPLAY_DATA 11
+#define DISPLAY_CS 10
 
 #define FLOW_SENSOR 3
 
